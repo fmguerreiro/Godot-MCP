@@ -75,6 +75,8 @@ func handle_command(command_type, params):
 			return handle_reimport_asset(params)
 		"IMPORT_GLB_SCENE":
 			return handle_import_glb_scene(params)
+		"SEND_INPUT":
+			return handle_send_input(params)
 		_:
 			return {"error": "Unknown command type: " + command_type}
 
@@ -824,12 +826,9 @@ func handle_editor_control(params):
 
 func handle_capture_screenshot(params):
 	var editor_interface = editor_plugin.get_editor_interface()
-	var viewport = editor_interface.get_editor_viewport_2d() if params.get("editor", false) else null
 	var save_path = params.get("path", "user://screenshot.png")
 	if editor_interface.is_playing_scene():
-		# During play, we can't easily grab the game viewport from the editor
-		# Save a screenshot via the editor's main viewport instead
-		pass
+		return {"error": "Screenshot during play mode is not yet supported"}
 	var main_screen = editor_interface.get_editor_main_screen()
 	var img = main_screen.get_viewport().get_texture().get_image()
 	if img == null:
@@ -839,6 +838,48 @@ func handle_capture_screenshot(params):
 		return {"error": "Failed to save screenshot: " + str(err)}
 	var abs_path = ProjectSettings.globalize_path(save_path)
 	return {"message": "Screenshot saved", "path": abs_path}
+
+func handle_send_input(params):
+	var editor_interface = editor_plugin.get_editor_interface()
+	if not editor_interface.is_playing_scene():
+		return {"error": "Game is not currently playing"}
+	var command = params.get("command", "")
+	if command == "":
+		return {"error": "Missing required parameter: command"}
+	var parts = command.strip_edges().split(" ", false)
+	if parts.size() == 0:
+		return {"error": "Empty command"}
+	if parts[0] == "interact":
+		Input.action_press("interact")
+		await editor_plugin.get_tree().create_timer(0.1).timeout
+		Input.action_release("interact")
+		return {"message": "Sent interact input"}
+	elif parts[0] == "move":
+		if parts.size() < 2:
+			return {"error": "move requires a direction: left, right, up, down"}
+		var direction = parts[1]
+		var action_map = {
+			"left": "move_left",
+			"right": "move_right",
+			"up": "move_up",
+			"down": "move_down"
+		}
+		if not action_map.has(direction):
+			return {"error": "Invalid direction '" + direction + "'. Use left, right, up, or down"}
+		var steps = 1
+		if parts.size() >= 3:
+			steps = int(parts[2])
+			if steps <= 0:
+				return {"error": "steps must be a positive integer"}
+		var action = action_map[direction]
+		for _i in range(steps):
+			Input.action_press(action)
+			await editor_plugin.get_tree().create_timer(0.1).timeout
+			Input.action_release(action)
+			await editor_plugin.get_tree().create_timer(0.05).timeout
+		return {"message": "Sent move " + direction + " x" + str(steps)}
+	else:
+		return {"error": "Unknown command '" + parts[0] + "'. Valid commands: move, interact"}
 
 # Material commands
 func handle_set_material(params):

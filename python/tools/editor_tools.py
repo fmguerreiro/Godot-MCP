@@ -1,7 +1,6 @@
 # tools/editor_tools.py
 from mcp.server.fastmcp import FastMCP, Context, Image
 from typing import Optional
-import base64
 from godot_connection import get_godot_connection
 
 def register_editor_tools(mcp: FastMCP):
@@ -106,19 +105,26 @@ def register_editor_tools(mcp: FastMCP):
         return editor_action(ctx, "SAVE")
 
     @mcp.tool()
-    def capture_screenshot(ctx: Context) -> str:
-        """Capture a screenshot of the Godot editor viewport and return the file path.
+    def capture_screenshot(ctx: Context, path: Optional[str] = None) -> Image:
+        """Capture a screenshot of the Godot editor viewport.
 
         Args:
             ctx: The MCP context
+            path: Optional file path to save the PNG (default: user://screenshot.png)
 
         Returns:
-            str: Path to the saved screenshot PNG file
+            Image: The captured screenshot as an image
         """
-        response = get_godot_connection().send_command("CAPTURE_SCREENSHOT", {})
-        if "error" in response:
-            return f"Error: {response['error']}"
-        return response.get("path", "Screenshot captured but path unknown")
+        try:
+            params = {}
+            if path is not None:
+                params["path"] = path
+            response = get_godot_connection().send_command("CAPTURE_SCREENSHOT", params)
+            if "error" in response:
+                raise RuntimeError(response["error"])
+            return Image(path=response["path"])
+        except Exception as e:
+            raise RuntimeError(f"Error capturing screenshot: {str(e)}")
 
     @mcp.tool()
     def send_game_input(ctx: Context, command: str) -> str:
@@ -140,7 +146,28 @@ def register_editor_tools(mcp: FastMCP):
         Returns:
             str: Success message or error details
         """
-        response = get_godot_connection().send_command("SEND_INPUT", {"command": command})
-        if "error" in response:
-            return f"Error: {response['error']}"
-        return response.get("message", "Input sent")
+        try:
+            parts = command.strip().split()
+            if not parts:
+                return "Error: Empty command"
+            if parts[0] == "interact":
+                if len(parts) != 1:
+                    return "Error: 'interact' takes no arguments"
+            elif parts[0] == "move":
+                valid_directions = {"left", "right", "up", "down"}
+                if len(parts) < 2 or parts[1] not in valid_directions:
+                    return f"Error: 'move' requires a direction: {', '.join(sorted(valid_directions))}"
+                if len(parts) == 3:
+                    if not parts[2].isdigit() or int(parts[2]) <= 0:
+                        return "Error: steps must be a positive integer"
+                elif len(parts) > 3:
+                    return "Error: 'move' takes at most 2 arguments: direction and steps"
+            else:
+                return f"Error: Unknown command '{parts[0]}'. Valid commands: move, interact"
+
+            response = get_godot_connection().send_command("SEND_INPUT", {"command": command})
+            if "error" in response:
+                return f"Error: {response['error']}"
+            return response.get("message", "Input sent")
+        except Exception as e:
+            return f"Error sending game input: {str(e)}"
