@@ -11,6 +11,8 @@ func set_editor_plugin(plugin):
 # Main command handling function
 func handle_command(command_type, params):
 	match command_type:
+		"CAPTURE_SCREENSHOT":
+			return handle_capture_screenshot(params)
 		"GET_SCENE_INFO":
 			return handle_get_scene_info()
 		"OPEN_SCENE":
@@ -819,6 +821,24 @@ func handle_editor_control(params):
 			return {"message": "Console reading not implemented in Godot"}
 		_:
 			return {"error": "Unknown editor command: " + command}
+
+func handle_capture_screenshot(params):
+	var editor_interface = editor_plugin.get_editor_interface()
+	var viewport = editor_interface.get_editor_viewport_2d() if params.get("editor", false) else null
+	var save_path = params.get("path", "user://screenshot.png")
+	if editor_interface.is_playing_scene():
+		# During play, we can't easily grab the game viewport from the editor
+		# Save a screenshot via the editor's main viewport instead
+		pass
+	var main_screen = editor_interface.get_editor_main_screen()
+	var img = main_screen.get_viewport().get_texture().get_image()
+	if img == null:
+		return {"error": "Failed to capture viewport image"}
+	var err = img.save_png(save_path)
+	if err != OK:
+		return {"error": "Failed to save screenshot: " + str(err)}
+	var abs_path = ProjectSettings.globalize_path(save_path)
+	return {"message": "Screenshot saved", "path": abs_path}
 
 # Material commands
 func handle_set_material(params):

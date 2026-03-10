@@ -1,6 +1,7 @@
 # tools/editor_tools.py
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import FastMCP, Context, Image
 from typing import Optional
+import base64
 from godot_connection import get_godot_connection
 
 def register_editor_tools(mcp: FastMCP):
@@ -103,3 +104,43 @@ def register_editor_tools(mcp: FastMCP):
             str: Success message or error details
         """
         return editor_action(ctx, "SAVE")
+
+    @mcp.tool()
+    def capture_screenshot(ctx: Context) -> str:
+        """Capture a screenshot of the Godot editor viewport and return the file path.
+
+        Args:
+            ctx: The MCP context
+
+        Returns:
+            str: Path to the saved screenshot PNG file
+        """
+        response = get_godot_connection().send_command("CAPTURE_SCREENSHOT", {})
+        if "error" in response:
+            return f"Error: {response['error']}"
+        return response.get("path", "Screenshot captured but path unknown")
+
+    @mcp.tool()
+    def send_game_input(ctx: Context, command: str) -> str:
+        """Send input commands to the running Godot game.
+
+        Commands:
+            move <direction> <steps> - Move player (left/right/up/down, default 1 step)
+            interact - Press the interact button
+
+        Examples:
+            "move left 5" - move left 5 tiles
+            "move up 3" - move up 3 tiles
+            "interact" - interact with facing entity
+
+        Args:
+            ctx: The MCP context
+            command: The input command string
+
+        Returns:
+            str: Success message or error details
+        """
+        response = get_godot_connection().send_command("SEND_INPUT", {"command": command})
+        if "error" in response:
+            return f"Error: {response['error']}"
+        return response.get("message", "Input sent")
