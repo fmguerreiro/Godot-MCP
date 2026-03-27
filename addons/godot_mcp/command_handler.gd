@@ -76,7 +76,7 @@ func handle_command(command_type, params):
 		"IMPORT_GLB_SCENE":
 			return handle_import_glb_scene(params)
 		"SEND_INPUT":
-			return handle_send_input(params)
+			return await handle_send_input(params)
 		_:
 			return {"error": "Unknown command type: " + command_type}
 
