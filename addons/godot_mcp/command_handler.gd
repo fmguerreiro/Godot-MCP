@@ -826,18 +826,29 @@ func handle_editor_control(params):
 
 func handle_capture_screenshot(params):
 	var editor_interface = editor_plugin.get_editor_interface()
-	var save_path = params.get("path", "user://screenshot.png")
+	var user_dir = OS.get_user_data_dir()
 	if editor_interface.is_playing_scene():
-		return {"error": "Screenshot during play mode is not yet supported"}
+		var trigger_path = user_dir + "/capture_request"
+		var screenshot_path = user_dir + "/game_screenshot.png"
+		var f = FileAccess.open(trigger_path, FileAccess.WRITE)
+		f.store_string("1")
+		f.close()
+		var waited = 0
+		while FileAccess.file_exists(trigger_path) and waited < 2000:
+			OS.delay_msec(50)
+			waited += 50
+		if FileAccess.file_exists(trigger_path):
+			return {"error": "Game did not respond to capture request (is DebugCapture autoload enabled?)"}
+		return {"message": "Game screenshot saved", "path": screenshot_path, "source": "game"}
 	var main_screen = editor_interface.get_editor_main_screen()
 	var img = main_screen.get_viewport().get_texture().get_image()
 	if img == null:
 		return {"error": "Failed to capture viewport image"}
+	var save_path = user_dir + "/screenshot.png"
 	var err = img.save_png(save_path)
 	if err != OK:
 		return {"error": "Failed to save screenshot: " + str(err)}
-	var abs_path = ProjectSettings.globalize_path(save_path)
-	return {"message": "Screenshot saved", "path": abs_path}
+	return {"message": "Editor screenshot saved", "path": save_path, "source": "editor"}
 
 func handle_send_input(params):
 	var editor_interface = editor_plugin.get_editor_interface()
